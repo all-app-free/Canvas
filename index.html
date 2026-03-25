@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Luvyx Canvas</title>
+    <style>
+        /* Základní styl a tmavé pozadí */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1e1e1e;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            color: white;
+        }
+
+        /* Minimalistický Toolbar */
+        header {
+            padding: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            background-color: #2d2d2d;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .group {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            border-right: 1px solid #444;
+            padding-right: 10px;
+        }
+
+        .group:last-child { border-right: none; }
+
+        button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #444;
+            color: white;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        button:hover { background-color: #555; }
+        button.active { outline: 2px solid #3498db; }
+
+        /* Barevné kuličky */
+        .color-btn {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            padding: 0;
+            border: 2px solid transparent;
+        }
+
+        .color-btn.active { border-color: white; }
+
+        /* Plátno */
+        #canvas-container {
+            flex-grow: 1;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        canvas {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+            touch-action: none; /* Důležité pro mobilní kreslení */
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .btn-save { background-color: #27ae60; }
+        .btn-clear { background-color: #c0392b; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="group">
+            <button class="color-btn active" style="background-color: black;" onclick="setColor('black', this)"></button>
+            <button class="color-btn" style="background-color: #3498db;" onclick="setColor('#3498db', this)"></button>
+            <button class="color-btn" style="background-color: #e74c3c;" onclick="setColor('#e74c3c', this)"></button>
+            <button class="color-btn" style="background-color: #2ecc71;" onclick="setColor('#2ecc71', this)"></button>
+            <button class="color-btn" style="background-color: white; border: 1px solid #ccc;" onclick="setColor('white', this)"></button>
+        </div>
+
+        <div class="group">
+            <button onclick="setSize(2, this)">S</button>
+            <button class="active" onclick="setSize(8, this)">M</button>
+            <button onclick="setSize(20, this)">L</button>
+        </div>
+
+        <div class="group">
+            <button id="eraser-btn" onclick="useEraser()">Guma</button>
+            <button class="btn-clear" onclick="clearCanvas()">Vyčistit</button>
+            <button class="btn-save" onclick="saveImage()">Uložit</button>
+        </div>
+    </header>
+
+    <div id="canvas-container">
+        <canvas id="paintCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('paintCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvas-container');
+        
+        let drawing = false;
+        let color = 'black';
+        let size = 8;
+        let isEraser = false;
+
+        // Inicializace velikosti plátna
+        function resizeCanvas() {
+            // Nastavíme vnitřní rozlišení plátna podle velikosti kontejneru
+            const rect = container.getBoundingClientRect();
+            canvas.width = rect.width - 30; // 30px rezerva pro padding
+            canvas.height = rect.height - 30;
+            
+            // Vyplníme bílou barvou (aby PNG nebyl průhledný)
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Obnovíme nastavení štětce po změně velikosti
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Logika kreslení
+        function startPosition(e) {
+            drawing = true;
+            draw(e);
+        }
+
+        function finishedPosition() {
+            drawing = false;
+            ctx.beginPath(); // Resetuje cestu, aby se čáry nespojovaly
+        }
+
+        function draw(e) {
+            if (!drawing) return;
+
+            // Získání souřadnic (myš i dotyk)
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX || e.touches[0].clientX) - rect.left;
+            const y = (e.clientY || e.touches[0].clientY) - rect.top;
+
+            ctx.lineWidth = size;
+            ctx.strokeStyle = isEraser ? 'white' : color;
+
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        // Event Listeners
+        canvas.addEventListener('mousedown', startPosition);
+        canvas.addEventListener('mouseup', finishedPosition);
+        canvas.addEventListener('mousemove', draw);
+
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startPosition(e); });
+        canvas.addEventListener('touchend', finishedPosition);
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); });
+
+        // Funkce nástrojů
+        function setColor(newColor, btn) {
+            isEraser = false;
+            color = newColor;
+            updateActiveButton(btn, '.color-btn');
+            document.getElementById('eraser-btn').classList.remove('active');
+        }
+
+        function setSize(newSize, btn) {
+            size = newSize;
+            updateActiveButton(btn, '.group button');
+        }
+
+        function useEraser() {
+            isEraser = true;
+            document.getElementById('eraser-btn').classList.add('active');
+            // Zrušíme aktivní barvu v UI
+            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+        }
+
+        function clearCanvas() {
+            if(confirm('Opravdu chcete vymazat celé plátno?')) {
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function saveImage() {
+            const link = document.createElement('a');
+            link.download = 'luvyx-canvas.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        function updateActiveButton(btn, selector) {
+            const parent = btn.parentElement;
+            parent.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+    </script>
+</body>
+</html>
+
